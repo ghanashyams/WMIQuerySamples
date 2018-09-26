@@ -4,6 +4,10 @@
 #include "stdafx.h"
 #include <string>
 #include <windows.h>
+#include <comutil.h>
+#include <wbemidl.h>
+#include <objbase.h>
+#include <atlbase.h>
 #include "eventsink.h"
 #include <atomic>
 
@@ -17,7 +21,6 @@ BOOL CtrlHandler(DWORD fdwCtrlType)
 		cout << "Ctrl-C event" << endl;
 		g_shutdown = true;
 		Sleep(10000);
-		//Beep(750, 300);
 		return(TRUE);
 	default:
 		return FALSE;
@@ -112,6 +115,53 @@ int main(int iArgCnt, char ** argv)
 		}
 
 		cout << "Connected to ROOT\\CIMV2 WMI namespace" << endl;
+
+		// Synchronous Query
+		if (SUCCEEDED(hres))
+		{
+			// execute a query
+			CComPtr< IEnumWbemClassObject > enumerator;
+			hres = pSvc->ExecQuery(L"WQL", L"SELECT * FROM Win32_Processor",
+				WBEM_FLAG_FORWARD_ONLY, NULL, &enumerator);
+			if (SUCCEEDED(hres))
+			{
+				// read the first instance from the enumeration (only one on single processor machines)
+				CComPtr< IWbemClassObject > processor = NULL;
+				ULONG retcnt;
+				hres = enumerator->Next(WBEM_INFINITE, 1L, reinterpret_cast<IWbemClassObject**>(&processor), &retcnt);
+				if (SUCCEEDED(hres))
+				{
+					if (retcnt > 0)
+					{
+						// extract a property value for installed processor
+						_variant_t var_val;
+						hres = processor->Get(L"Name", 0, &var_val, NULL, NULL);
+						if (SUCCEEDED(hres))
+						{
+							//_bstr_t str = var_val;
+							cout << "Processor name: " << _bstr_t(var_val) << std::endl;
+						}
+						else
+						{
+							cout << "IWbemClassObject::Get failed" << std::endl;
+							
+						}
+					}
+					else
+					{
+						cout << "Enumeration empty" << std::endl;
+					}
+				}
+				else
+				{
+					cout << "Error in iterating through enumeration" << std::endl;
+				}
+			}
+			else
+			{
+				cout << "Query failed" << std::endl;
+			}
+		}
 
 
 		// Step 5: --------------------------------------------------
